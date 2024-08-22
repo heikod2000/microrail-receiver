@@ -1,0 +1,8 @@
+{
+    "name": "Grubenlok HELGA",
+    "wlan_ssid": "microrail01",
+    "wlan_password": "12345678",
+    "motor_frequency": 100,
+    "motor_maxspeed": 100,
+    "motor_speed_step": 7
+}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MicroRail</title>
+    <link href="pure-min.css" rel="stylesheet" type="text/css">
+    <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+    <div class="headerblock">
+        <h1>MicroRail</h1>
+        <h4>Setup</h4>
+    </div>
+
+    <div style="margin: 1rem">
+        <form class="pure-form pure-form-stacked" method="post" action="/setup">
+            <h2>Empfänger-Einstellungen</h2>
+            <fieldset>
+                <div class="space">
+                    <label class="space" for="stacked-wlanssid">WLAN-Ssid</label>
+                    <input type="text" class="pure-input-1" id="stacked-wlanssid" name="wlanssid" value=""/>
+                </div>
+                <div class="space">
+                    <label for="stacked-wlanpassword">Passwort</label>
+                    <input type="text" class="pure-input-1" id="stacked-wlanpassword" name="password" value="" readonly=""/>
+                </div>
+                <div class="space">
+                    <label for="stacked-name">Name</label>
+                    <input type="text" class="pure-input-1" id="stacked-name" name="name" value=""/>
+                </div>
+                <div class="space">
+                    <label for="stacked-motor-frequency">Motor Frequenz [%]</label>
+                    <input type="text" id="stacked-motor-frequency" name="motor-frequency" value=""/>
+                </div>
+                <div class="space">
+                    <label for="stacked-motor-maxspeed">Motor Maxspeed [%]</label>
+                    <input type="text" id="stacked-motor-maxspeed" name="motor-maxspeed" value=""/>
+                </div>
+                <div class="space">
+                    <label for="stacked-motor-speedstep">Regler Schrittweite</label>
+                    <input type="text" id="stacked-motor-speedstep" name="motor-speedstep" value=""/>
+                </div>
+            </fieldset>
+            <button type="submit" class="pure-button pure-button-primary" name="submit" value="safe">Speichern</button>
+
+        </form>
+        <p>Nach dem Speichern muss der <i>Microrail</i>-Empfänger für die Übernahme der Einstellungen
+            neu gestartet werden.</p>
+    </div>
+
+    <script>
+        async function loadConfig() {
+            const response = await fetch('/config')
+            const config = await response.json()
+            console.log(config)
+            document.getElementById('stacked-wlanssid').value = config.wlan_ssid
+            document.getElementById('stacked-wlanpassword').value = config.wlan_password
+            document.getElementById('stacked-name').value = config.name
+            document.getElementById('stacked-motor-frequency').value = config.motor_frequency
+            document.getElementById('stacked-motor-maxspeed').value = config.motor_maxspeed
+            document.getElementById('stacked-motor-speedstep').value = config.motor_speed_step
+        }
+        loadConfig();
+    </script>
+</body>
+</html>
