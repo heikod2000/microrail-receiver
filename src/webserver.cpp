@@ -34,6 +34,10 @@ void configureWebServer(AsyncWebServer& server, JsonDocument config) {
     request->send(200, "application/json", response);
   });
 
+  server.on("/heap", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", String(ESP.getFreeHeap()));
+  });
+
   /**
    * Handle setup POST request to save new configuration data.
    * Konfigurationsdaten werden als Json serialisiert und in die Datei /config.json des

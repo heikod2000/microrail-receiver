@@ -33,32 +33,23 @@
 #define dir_backward 1
 #define STATUS_LED D6
 
-// Events für Daten an Browser senden
-#define EVENT_START             "event.start"
-#define EVENT_BATTERY_VOLTAGE   "event.batvoltage"
-#define EVENT_BATTERY_RATE      "event.batrate"
-#define EVENT_SPEED             "event.speed"
-#define EVENT_DIRECTION         "event.direction"
-
 // Function prototypes
 void motionControl();
 void checkPower();
 void handleCommands(String command);
-void sendEventDirection();
-void sendEventSpeed();
 
 // Create a webserver that listens for HTTP request on port 80
 AsyncWebServer server(80);
-AsyncEventSource events("/events");
+AsyncWebSocket ws("/ws");
 
 // Lolin Motor-Shield (Version 2.0.0, HR8833, AT8870)
 LOLIN_I2C_MOTOR motor;
 
 // Timer regelt alle 100 ms die Motorgeschwindigkeit
-Ticker motionControlTicker(motionControl, 100, 0, MILLIS);
+Ticker motionControlTicker(motionControl, 500, 0, MILLIS);
 
-// Timer fragt alle 30 Sekunden den Akku-Status ab
-Ticker powerCheckTicker(checkPower, 30000, 0, MILLIS);
+// Timer fragt alle 60 Sekunden den Akku-Status ab
+Ticker powerCheckTicker(checkPower, 60000, 0, MILLIS);
 
 // Speicher zur Berechnung der Durchschnittswerte bei der Akkuprüfung
 RunningMedian median1 = RunningMedian(10);
@@ -72,8 +63,56 @@ float batVoltage = 4.2;        // Akku-Spannung
 
 const char *configFilename = "/config.json";  // Filename in Filesystem (LittleFS)
 JsonDocument config;
-String appVersionString = "MicroRail R v" + appVersion + " by hde";
+String appVersionString = "MicroRail R v" + appVersion;
 
+uint32_t wsClientId; // ID des WebSocket-Clients
+AsyncWebSocketClient * wsClient;
+
+String buildClientStatus(String source) {
+  JsonDocument status;
+
+  status["name"] = config[CFG_NAME];
+  status["ssid"] = config[CFG_WLAN_SSID];
+  status["version"] = appVersionString;
+  status["direction"] = direction;
+  status["speed"] = actual_speed;
+  status["batRate"] = batRate;
+  status["batVoltage"] = (float)((int)(batVoltage*100))/100.0;
+  status["source"] = source;
+
+  String result;
+  serializeJson(status, result);
+  return result;
+}
+
+/**
+ * Websocket-Eventhandler
+ */
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
+  if(type == WS_EVT_CONNECT){
+    wsClientId = client->id();
+    wsClient = client;
+    Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
+    client->text(buildClientStatus("connect"));
+  } else if(type == WS_EVT_DISCONNECT){
+    Serial.printf("ws[%s][%u] disconnect\n", server->url(), client->id());
+  } else if(type == WS_EVT_ERROR){
+    Serial.printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+  } else if(type == WS_EVT_DATA){
+    AwsFrameInfo * info = (AwsFrameInfo*)arg;
+      String msg = "";
+      if(info->final && info->index == 0 && info->len == len){
+        if(info->opcode == WS_TEXT){
+          for(size_t i=0; i < info->len; i++) {
+            msg += (char) data[i];
+          }
+          if (msg.startsWith("#")) {
+            handleCommands(msg);
+          }
+        }
+      }
+  }
+}
 
 /*------------------------------------------------------------------------------
 SETUP
@@ -114,25 +153,14 @@ void setup() {
 
   config[CFG_MAC_ADDRESS] = WiFi.macAddress();
   configureWebServer(server, config);
-
-  server.on("/cmd", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/plain", "ok");
-    handleCommands(request->getParam("command")->value());
-  });
-
-  events.onConnect([](AsyncEventSourceClient * client) {
-    if (client->lastId()) {
-      Serial.printf("Client reconnected! Letzte message ID: %u\n", client->lastId());
-    }
-    client->send(buildConnectMessage().c_str(), EVENT_START, millis());
-    sendEventSpeed();
-    sendEventDirection();
-  });
-  server.addHandler(&events);
   Serial.println("- HTTP server started : OK");
 
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
+  Serial.println("- Websocket Server started : OK");
+
   // Start Timer
-  motionControlTicker.start();
+  //motionControlTicker.start();
   powerCheckTicker.start();
   Serial.println("- Timer started : OK");
 
@@ -158,42 +186,28 @@ void setup() {
 LOOP
 ------------------------------------------------------------------------------*/
 void loop() {
-  motionControlTicker.update();
+  //motionControlTicker.update();
   powerCheckTicker.update();
-  delay(10);
-}
-
-void sendEventDirection() {
-  char directionChar[2];
-  itoa(direction, directionChar, 10);
-  events.send(directionChar, EVENT_DIRECTION, millis());
-}
-
-void sendEventSpeed() {
-  char speedChar[4];
-  itoa(actual_speed, speedChar, 10);
-  events.send(speedChar, EVENT_SPEED, millis());
+  ws.cleanupClients();
 }
 
 void handleCommands(String command) {
-  Serial.print("Command: [");
-  Serial.print(command);
-  Serial.println("]");
+  Serial.printf("Command: [%s]\n", command.c_str());
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  if (command == "STOP") {
+  if (command == "#STOP") {
     target_speed = 0;
-  } else if (command == "SLOWER") {
+  } else if (command == "#SLOWER") {
     target_speed -= motor_speed_step;
     if (target_speed < 0) {
       target_speed = 0;
     }
-  } else if (command == "FASTER") {
+  } else if (command == "#FASTER") {
     target_speed += motor_speed_step;
     if (target_speed > 100) {
       target_speed = 100;
     }
-  } else if (command == "CHANGEDIRECTION") {
+  } else if (command == "#CHANGEDIRECTION") {
     // Richtungswechsel nur bei Halt
     if (actual_speed == 0) {
       if (direction == dir_forward) {
@@ -212,11 +226,9 @@ void handleCommands(String command) {
         //motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW);
       }
       //delay(200);
-      // Send direction
-      sendEventDirection();
+       wsClient->text(buildClientStatus("handleCommands")); // Richtungsänderung
     }
   }
-
 }
 
 /**
@@ -228,9 +240,10 @@ void motionControl() {
     // nichts zu tun
     return;
   }
+  Serial.println("motionControl");
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  float motor_maxspeed = floor(atoi(config[CFG_MOTOR_MAXSPEED]) / 100);
+  //float motor_maxspeed = floor(atoi(config[CFG_MOTOR_MAXSPEED]) / 100);
 
   if (actual_speed < target_speed) {
     // Geschwindigkeit erhöhen
@@ -247,8 +260,8 @@ void motionControl() {
   }
 
   // Motor steuern...
-  motor.changeDuty(MOTOR_CH_BOTH, actual_speed * motor_maxspeed);
-  sendEventSpeed();
+  //motor.changeDuty(MOTOR_CH_BOTH, actual_speed * motor_maxspeed);
+  wsClient->text(buildClientStatus("motionControl"));
 }
 
 /**
@@ -267,11 +280,5 @@ void checkPower() {
   batVoltage = roundf(batVoltage * 100) / 100;
   //Serial.printf("Akku %f V, %d %%\n", batVoltage, batRate);
 
-  char batVoltageChar[6];
-  dtostrf(batVoltage, 4, 2, batVoltageChar);
-  events.send(batVoltageChar, EVENT_BATTERY_VOLTAGE, millis());
-
-  char batRateChar[4];
-  itoa((int)batRate, batRateChar, 10);
-  events.send(batRateChar, EVENT_BATTERY_RATE, millis());
+  wsClient->text(buildClientStatus("checkPower"));
 }

@@ -1,4 +1,8 @@
-# Versionen
+# Version-History
+
+## Version 0.9.1
+
+- Umstellung von *Server-Sent Events* auf *Websockets*.
 
 ## Version 0.9.0
 
@@ -7,9 +11,3 @@
 - Aktualisierung Libs
 - JQuery Aufrufe durch plain JS ersetzt, JQUery-Lib entfernt
 - Design umgestellt
-
-## Version 0.5.0
-
-- erste gebrauchsfähige Softwareversion
-- Fahrzeugsteuerung funktionsfähig
-- Konfiguration über Sourcecode
