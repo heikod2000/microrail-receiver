@@ -249,19 +249,19 @@ void handleCommands(char* command) {
         // vorwärts -> umschalten auf rückwärts
         Serial.println("Richtungswechsel rückwärts");
         direction = dir_backward;
-        //motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
-        //delay(200);
-        //motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CCW);
+        motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
+        delay(100);
+        motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CCW);
       } else {
         // rückwärts -> umschalten auf vorwärts
         Serial.println("Richtungswechsel vorwärts");
         direction = dir_forward;
-        //motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
-        //delay(200);
-        //motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW);
+        motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
+        delay(100);
+        motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW);
       }
-      //delay(200);
-       notifyClients();
+      delay(100);
+      notifyClients();
     }
   }
 }
@@ -340,7 +340,7 @@ void motionControl() {
   Serial.println("motionControl");
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  //float motor_maxspeed = floor(atoi(config[CFG_MOTOR_MAXSPEED]) / 100);
+  float motor_maxspeed = (float)config[CFG_MOTOR_MAXSPEED].as<unsigned int>() / 100;
 
   if (actual_speed < target_speed) {
     // Geschwindigkeit erhöhen
@@ -355,9 +355,10 @@ void motionControl() {
       actual_speed = 0;
     }
   }
-
   // Motor steuern...
-  //motor.changeDuty(MOTOR_CH_BOTH, actual_speed * motor_maxspeed);
+  float newSpeed = actual_speed * motor_maxspeed;
+  Serial.printf("Speed: %.1f %%\n", newSpeed);
+  motor.changeDuty(MOTOR_CH_BOTH, newSpeed);
   notifyClients();
 }
 
