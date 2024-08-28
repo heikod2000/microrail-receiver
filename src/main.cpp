@@ -28,7 +28,7 @@
 #define CFG_MAC_ADDRESS "mac_address"
 
 // Wenn definiert, dann Verbindung mit bestehendem WLAN (file localconfig.h)
-#define LOCAL_DEBUG
+//#define LOCAL_DEBUG
 
 #ifdef  LOCAL_DEBUG
 #include "localconfig.h"
@@ -72,7 +72,7 @@ void motionControl();
 void checkPower();
 
 // Timer regelt alle x ms die Motorgeschwindigkeit
-Ticker motionControlTicker(motionControl, 100, 0, MILLIS);
+Ticker motionControlTicker(motionControl, 200, 0, MILLIS);
 // Timer fragt alle 60 Sekunden den Akku-Status ab
 Ticker powerCheckTicker(checkPower, 60000, 0, MILLIS);
 
