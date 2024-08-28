@@ -19,27 +19,27 @@
             <fieldset>
                 <div class="space">
                     <label class="space" for="stacked-wlanssid">WLAN-Ssid</label>
-                    <input type="text" class="pure-input-1" id="stacked-wlanssid" name="wlanssid" value=""/>
+                    <input type="text" class="pure-input-1" id="stacked-wlanssid" name="wlanssid" value="%SSID%"/>
                 </div>
                 <div class="space">
                     <label for="stacked-wlanpassword">Passwort</label>
-                    <input type="text" class="pure-input-1" id="stacked-wlanpassword" name="password" value="" readonly=""/>
+                    <input type="text" class="pure-input-1" id="stacked-wlanpassword" name="password" value="%PASSWORD%" readonly=""/>
                 </div>
                 <div class="space">
                     <label for="stacked-name">Name</label>
-                    <input type="text" class="pure-input-1" id="stacked-name" name="name" value=""/>
+                    <input type="text" class="pure-input-1" id="stacked-name" name="name" value="%NAME%"/>
                 </div>
                 <div class="space">
-                    <label for="stacked-motor-frequency">Motor Frequenz [%]</label>
-                    <input type="text" id="stacked-motor-frequency" name="motor-frequency" value=""/>
+                    <label for="stacked-motor-frequency">Motor Frequenz [&#37;]</label>
+                    <input type="text" id="stacked-motor-frequency" name="motor-frequency" value="%MOTORFREQUENCY%"/>
                 </div>
                 <div class="space">
-                    <label for="stacked-motor-maxspeed">Motor Maxspeed [%]</label>
-                    <input type="text" id="stacked-motor-maxspeed" name="motor-maxspeed" value=""/>
+                    <label for="stacked-motor-maxspeed">Motor Maxspeed [&#37;]</label>
+                    <input type="text" id="stacked-motor-maxspeed" name="motor-maxspeed" value="%MOTORMAXSPEED%"/>
                 </div>
                 <div class="space">
                     <label for="stacked-motor-speedstep">Regler Schrittweite</label>
-                    <input type="text" id="stacked-motor-speedstep" name="motor-speedstep" value=""/>
+                    <input type="text" id="stacked-motor-speedstep" name="motor-speedstep" value="%MOTORSPEEDSTEP%"/>
                 </div>
             </fieldset>
             <button type="submit" class="pure-button pure-button-primary" name="submit" value="safe">Speichern</button>
@@ -48,20 +48,5 @@
         <p>Nach dem Speichern muss der <i>Microrail</i>-Empfänger für die Übernahme der Einstellungen
             neu gestartet werden.</p>
     </div>
-
-    <script>
-        async function loadConfig() {
-            const response = await fetch('/config')
-            const config = await response.json()
-            console.log(config)
-            document.getElementById('stacked-wlanssid').value = config.wlan_ssid
-            document.getElementById('stacked-wlanpassword').value = config.wlan_password
-            document.getElementById('stacked-name').value = config.name
-            document.getElementById('stacked-motor-frequency').value = config.motor_frequency
-            document.getElementById('stacked-motor-maxspeed').value = config.motor_maxspeed
-            document.getElementById('stacked-motor-speedstep').value = config.motor_speed_step
-        }
-        loadConfig();
-    </script>
 </body>
 </html>

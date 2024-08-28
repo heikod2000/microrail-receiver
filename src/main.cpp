@@ -16,11 +16,16 @@
 #include <ticker.h>
 #include <RunningMedian.h>
 #include "version.h"
-#include "config.h"
 #include "wlanutils.h"
-#include "webserver.h"
-#include "const.h"
-#include "helper.h"
+
+#define CFG_NAME "name"
+#define CFG_WLAN_SSID "wlan_ssid"
+#define CFG_WLAN_PASSWORD "wlan_password"
+#define CFG_MOTOR_FREQUENCY "motor_frequency"
+#define CFG_MOTOR_MAXSPEED "motor_maxspeed"
+#define CFG_MOTOR_SPEED_STEP "motor_speed_step"
+#define CFG_IP_ADDRESS "ip_address"
+#define CFG_MAC_ADDRESS "mac_address"
 
 // Wenn definiert, dann Verbindung mit bestehendem WLAN (file localconfig.h)
 #define LOCAL_DEBUG
@@ -31,12 +36,30 @@
 
 #define dir_forward 0
 #define dir_backward 1
-#define STATUS_LED D6
+#define LED_STATUS D6
+#define LED_ONBOARD D4
 
-// Function prototypes
-void motionControl();
-void checkPower();
-void handleCommands(String command);
+// ----------------------------------------------------------------------------
+// Definition of the LED component
+// ----------------------------------------------------------------------------
+
+struct Led {
+    // state variables
+    uint8_t pin;
+    bool    on;
+
+    // methods
+    void update() {
+        digitalWrite(pin, on ? HIGH : LOW);
+    }
+};
+
+// ----------------------------------------------------------------------------
+// Definition of global variables
+// ----------------------------------------------------------------------------
+
+Led onboard_led = { LED_BUILTIN, true };  // Die Onboard LED verhält sich anders!
+Led status_led = { LED_STATUS, false };
 
 // Create a webserver that listens for HTTP request on port 80
 AsyncWebServer server(80);
@@ -45,9 +68,11 @@ AsyncWebSocket ws("/ws");
 // Lolin Motor-Shield (Version 2.0.0, HR8833, AT8870)
 LOLIN_I2C_MOTOR motor;
 
-// Timer regelt alle 100 ms die Motorgeschwindigkeit
-Ticker motionControlTicker(motionControl, 500, 0, MILLIS);
+void motionControl();
+void checkPower();
 
+// Timer regelt alle x ms die Motorgeschwindigkeit
+Ticker motionControlTicker(motionControl, 100, 0, MILLIS);
 // Timer fragt alle 60 Sekunden den Akku-Status ab
 Ticker powerCheckTicker(checkPower, 60000, 0, MILLIS);
 
@@ -62,85 +87,60 @@ byte batRate = 100;            // Akku-Kapazität
 float batVoltage = 4.2;        // Akku-Spannung
 
 const char *configFilename = "/config.json";  // Filename in Filesystem (LittleFS)
-JsonDocument config;
 String appVersionString = "MicroRail R v" + appVersion;
+StaticJsonDocument<350> config;
 
-uint32_t wsClientId; // ID des WebSocket-Clients
-AsyncWebSocketClient * wsClient;
-
-String buildClientStatus(String source) {
-  JsonDocument status;
-
-  status["name"] = config[CFG_NAME];
-  status["ssid"] = config[CFG_WLAN_SSID];
-  status["version"] = appVersionString;
-  status["direction"] = direction;
-  status["speed"] = actual_speed;
-  status["batRate"] = batRate;
-  status["batVoltage"] = (float)((int)(batVoltage*100))/100.0;
-  status["source"] = source;
-
-  String result;
-  serializeJson(status, result);
-  return result;
+void listAllFilesInDir(String dir_path) {
+	Dir dir = LittleFS.openDir(dir_path);
+	while(dir.next()) {
+		if (dir.isFile()) {
+			// print file names
+			Serial.printf("File: %s%s\n", dir_path.c_str(), dir.fileName().c_str());
+		}
+		if (dir.isDirectory()) {
+			// print directory names
+			Serial.printf("Dir: %s%s/\n", dir_path.c_str(), dir.fileName().c_str());
+			// recursive file listing inside new directory
+			listAllFilesInDir(dir_path + dir.fileName() + "/");
+		}
+	}
 }
 
 /**
- * Websocket-Eventhandler
+ * Filesystem initialisieren
  */
-void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
-  if(type == WS_EVT_CONNECT){
-    wsClientId = client->id();
-    wsClient = client;
-    Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
-    client->text(buildClientStatus("connect"));
-  } else if(type == WS_EVT_DISCONNECT){
-    Serial.printf("ws[%s][%u] disconnect\n", server->url(), client->id());
-  } else if(type == WS_EVT_ERROR){
-    Serial.printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
-  } else if(type == WS_EVT_DATA){
-    AwsFrameInfo * info = (AwsFrameInfo*)arg;
-      String msg = "";
-      if(info->final && info->index == 0 && info->len == len){
-        if(info->opcode == WS_TEXT){
-          for(size_t i=0; i < info->len; i++) {
-            msg += (char) data[i];
-          }
-          if (msg.startsWith("#")) {
-            handleCommands(msg);
-          }
-        }
-      }
+void initLittleFS() {
+  // Initialize LittleFS
+  if(!LittleFS.begin()) {
+    Serial.println("Cannot mount LittleFS volume...");
+    while (1) {
+      onboard_led.on = millis() % 200 < 50;
+      onboard_led.update();
+    }
   }
+  // Dateien für Debug auflisten
+  //listAllFilesInDir("/");
+  Serial.println("- init LittleFS : OK");
 }
 
-/*------------------------------------------------------------------------------
-SETUP
-------------------------------------------------------------------------------*/
-
 /**
- * Setup-Routine des Microcontrollers
- * - Filesystem initialisieren und Konfiguration einlesen
- * - WLAN-Verbindung starten
- * - Webserver starten
- * - Motorensteuerung starten
+ * Konfiguration 'config.json' aus dem FS lesen
  */
-void setup() {
-  Serial.begin(115200);
-  Serial.println("");
-  Serial.print("- Init: ");
-  Serial.println(appVersionString.c_str());
+void initConfiguration() {
+  File configFile = LittleFS.open(configFilename, "r");
+  if(!configFile || configFile.isDirectory()){
+    Serial.println("Fail to open configfile for reading");
+    while (1) {
+      onboard_led.on = millis() % 200 < 50;
+      onboard_led.update();
+    }
+  }
+  deserializeJson(config, configFile);
+  configFile.close();
+  Serial.println("- init Configuration : OK");
+}
 
-  // Analoger Eingang für Überwachung der Akku-Spannung
-  pinMode(A0, INPUT);
-  // Status-LED initialisieren
-  pinMode(STATUS_LED, OUTPUT);
-  analogWrite(STATUS_LED, 200); // Status-LED hell leuchten
-
-  initFs(); // LittleFS initialisieren
-  readConfigurationFromFs(); // Konfiguration aus LittleFS einlesen
-
-  // Start WLAN
+void initWiFi() {
 #ifdef LOCAL_DEBUG
   setupWiFiSTA(ssidSTA, passwordSTA);  // WiFi Verbindung mit bestehendem WLAN aufbauen
   config[CFG_IP_ADDRESS] = WiFi.localIP().toString();
@@ -150,64 +150,99 @@ void setup() {
   setupWifiAP(wlan_ssid, wlan_password);  // WLAN-Accesspoint starten
   config[CFG_IP_ADDRESS] = WiFi.softAPIP();
 #endif
-
   config[CFG_MAC_ADDRESS] = WiFi.macAddress();
-  configureWebServer(server, config);
-  Serial.println("- HTTP server started : OK");
+}
 
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
-  Serial.println("- Websocket Server started : OK");
+// ----------------------------------------------------------------------------
+// Web server initialization
+// ----------------------------------------------------------------------------
 
-  // Start Timer
-  //motionControlTicker.start();
-  powerCheckTicker.start();
-  Serial.println("- Timer started : OK");
-
-  // Init Motor-Shield
-  Serial.print("- Motor-Shield init");
-  while (motor.PRODUCT_ID != PRODUCT_ID_I2C_MOTOR) {
-    motor.getInfo();
+String processor(const String& var) {
+  if(var == "SSID") {
+    return config[CFG_WLAN_SSID];
+  } else if(var == "NAME") {
+      return config[CFG_NAME];
+  } else if(var == "VERSION") {
+    return appVersionString;
+  } else if(var == "PASSWORD") {
+      return config[CFG_WLAN_PASSWORD];
+  } else if(var == "MOTORFREQUENCY") {
+      return String(config[CFG_MOTOR_FREQUENCY]);
+  } else if(var == "MOTORMAXSPEED") {
+      return String(config[CFG_MOTOR_MAXSPEED]);
+  } else if(var == "MOTORSPEEDSTEP") {
+      return String(config[CFG_MOTOR_SPEED_STEP]);
   }
-  int motor_frequency = config[CFG_MOTOR_FREQUENCY];
-  motor.changeFreq(MOTOR_CH_BOTH, motor_frequency);
-  motor.changeDuty(MOTOR_CH_BOTH, 0.0);
-  motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW); // Vorwärts
-  Serial.println(" : OK");
-
-  // LED einschalten
-  analogWrite(STATUS_LED, 50);  // Status-LED dunkel leuchten
-  Serial.println("- Setup completed");
-  Serial.println("----------------------------------------------");
-  debugConfig(config);
+  return String();
 }
 
-/*------------------------------------------------------------------------------
-LOOP
-------------------------------------------------------------------------------*/
-void loop() {
-  //motionControlTicker.update();
-  powerCheckTicker.update();
-  ws.cleanupClients();
+void initWebServer() {
+  server.serveStatic("/", LittleFS, "/");
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/index.html", "text/html", false, processor);
+  });
+
+  server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/chip.png", "image/png");
+  });
+
+  server.on("/heap", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", String(ESP.getFreeHeap()));
+  });
+
+  server.on("/setup", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(LittleFS, "/setup.html", "text/html", false, processor);
+  });
+
+  server.on("/setup", HTTP_POST, [](AsyncWebServerRequest *request){
+    Serial.println("save setup data");
+    StaticJsonDocument<300> newConfig;
+    newConfig[CFG_NAME] = request->getParam("name", true)->value();
+    newConfig[CFG_WLAN_SSID] = request->getParam("wlanssid", true)->value();
+    newConfig[CFG_MOTOR_FREQUENCY] = request->getParam("motor-frequency", true)->value();
+    newConfig[CFG_MOTOR_MAXSPEED] = request->getParam("motor-maxspeed", true)->value();
+    newConfig[CFG_MOTOR_SPEED_STEP] = request->getParam("motor-speedstep", true)->value();
+    newConfig[CFG_WLAN_PASSWORD] = request->getParam("password", true)->value();
+
+    String configFile;
+    serializeJsonPretty(newConfig, configFile);
+    File file = LittleFS.open("/config.json", "w");
+    file.print(configFile);
+    file.close();
+
+    request->send(LittleFS, "/setupok.html");
+  });
+
+  server.begin();
+  Serial.println("- HTTP server started : OK");
 }
 
-void handleCommands(String command) {
-  Serial.printf("Command: [%s]\n", command.c_str());
+// ----------------------------------------------------------------------------
+// WebSocket initialization
+// ----------------------------------------------------------------------------
+
+void notifyClients() {
+  ws.printfAll("A:%d:%d", direction, actual_speed);
+}
+
+void handleCommands(char* command) {
+  Serial.printf("Command: [%s]\n", command);
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  if (command == "#STOP") {
+  if (strcmp(command, "#STOP") == 0) {
     target_speed = 0;
-  } else if (command == "#SLOWER") {
+  } else if (strcmp(command, "#SLOWER") == 0) {
     target_speed -= motor_speed_step;
     if (target_speed < 0) {
       target_speed = 0;
     }
-  } else if (command == "#FASTER") {
+  } else if (strcmp(command, "#FASTER") == 0) {
     target_speed += motor_speed_step;
     if (target_speed > 100) {
       target_speed = 100;
     }
-  } else if (command == "#CHANGEDIRECTION") {
+  } else if (strcmp(command, "#CHANGEDIRECTION") == 0) {
     // Richtungswechsel nur bei Halt
     if (actual_speed == 0) {
       if (direction == dir_forward) {
@@ -226,10 +261,72 @@ void handleCommands(String command) {
         //motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW);
       }
       //delay(200);
-       wsClient->text(buildClientStatus("handleCommands")); // Richtungsänderung
+       notifyClients();
     }
   }
 }
+
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
+  AwsFrameInfo * info = (AwsFrameInfo*)arg;
+  String msg = "";
+  if(info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT){
+      data[len] = 0;
+      char* cmd = (char*)data;
+      handleCommands(cmd);
+  }
+}
+
+/**
+ * Websocket-Eventhandler
+ */
+void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
+  if(type == WS_EVT_CONNECT){
+    client->printf("A:%d:%d", direction, actual_speed);
+    Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
+  } else if(type == WS_EVT_DISCONNECT){
+    Serial.printf("ws[%s][%u] disconnect\n", server->url(), client->id());
+  } else if(type == WS_EVT_ERROR){
+    Serial.printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+  } else if(type == WS_EVT_DATA){
+      handleWebSocketMessage(arg, data, len);
+  }
+}
+
+/**
+ * WebSocket-Server initialisieren
+ */
+void initWebSocket() {
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+  Serial.println("- init WebSocket: OK");
+}
+
+void initMotorShield() {
+  while (motor.PRODUCT_ID != PRODUCT_ID_I2C_MOTOR) {
+    motor.getInfo();
+    onboard_led.on = millis() % 200 < 50;
+    onboard_led.update();
+  }
+  int motor_frequency = config[CFG_MOTOR_FREQUENCY];
+  motor.changeFreq(MOTOR_CH_BOTH, motor_frequency);
+  motor.changeDuty(MOTOR_CH_BOTH, 0.0);
+  motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW); // Vorwärts
+  Serial.println("- init Motor-Shield: OK");
+}
+
+void debugConfig(JsonDocument& config) {
+    Serial.printf("WLAN SSID: [%s], Passwort: [%s]\n",
+      config[CFG_WLAN_SSID].as<const char*>(),
+      config[CFG_WLAN_PASSWORD].as<const char*>());
+    Serial.printf("IP-Address: [%s], MAC-Address: [%s]\n",
+      config[CFG_IP_ADDRESS].as<const char*>(), config[CFG_MAC_ADDRESS].as<const char*>());
+    Serial.printf("Name: [%s], Motor Frequenz: [%d] Hz, Maxspeed: [%d] %%, SpeedStep: [%d]\n",
+      config[CFG_NAME].as<const char*>(),
+      config[CFG_MOTOR_FREQUENCY].as<unsigned int>(),
+      config[CFG_MOTOR_MAXSPEED].as<unsigned int>(),
+      config[CFG_MOTOR_SPEED_STEP].as<unsigned int>());
+}
+
 
 /**
  * @brief timer-gesteuerte Routine zur Anpasusng der Geschwindigkeit.
@@ -261,7 +358,7 @@ void motionControl() {
 
   // Motor steuern...
   //motor.changeDuty(MOTOR_CH_BOTH, actual_speed * motor_maxspeed);
-  wsClient->text(buildClientStatus("motionControl"));
+  notifyClients();
 }
 
 /**
@@ -278,7 +375,58 @@ void checkPower() {
   batRate = map(BatVoltage1, 240, 420, 0, 100);
   batVoltage = BatVoltage1 / 100.0;
   batVoltage = roundf(batVoltage * 100) / 100;
-  //Serial.printf("Akku %f V, %d %%\n", batVoltage, batRate);
+  Serial.printf("Akku %f V, %d %%\n", batVoltage, batRate);
+  ws.printfAll("B:%0.1f:%d", batVoltage, batRate);
+}
 
-  wsClient->text(buildClientStatus("checkPower"));
+/**
+ * Setup-Routine des Microcontrollers
+ * - Filesystem initialisieren und Konfiguration einlesen
+ * - WLAN-Verbindung starten
+ * - Webserver starten
+ * - Motorensteuerung starten
+ */
+// ----------------------------------------------------------------------------
+// Initialization
+// ----------------------------------------------------------------------------
+void setup() {
+  pinMode(onboard_led.pin, OUTPUT); // OnBoard-LED
+  pinMode(status_led.pin, OUTPUT);  // Status-LED
+  pinMode(A0, INPUT);               // Anlaloger Eingang für Akku-Überwachung
+
+  // Onboard-Led einschalten zur Visualisierung des Setup-Prozesses
+  onboard_led.on = false; onboard_led.update();
+
+  Serial.begin(115200); delay(500);
+  Serial.printf("\n- Init: %s\n", appVersionString.c_str());
+
+  initLittleFS();
+  initConfiguration();
+  initWiFi();
+  initMotorShield();
+  initWebSocket();
+  initWebServer();
+
+  // Start Timer
+  motionControlTicker.start();
+  powerCheckTicker.start();
+  Serial.println("- Timer started : OK");
+
+  Serial.println("- Setup completed");
+  Serial.println("----------------------------------------------");
+  debugConfig(config);
+
+  // Onboard-LED ausschalten, Status-LED einschalten
+  onboard_led.on = true; onboard_led.update();
+  status_led.on = true; status_led.update();
+}
+
+// ----------------------------------------------------------------------------
+// Main control loop
+// ----------------------------------------------------------------------------
+
+void loop() {
+  motionControlTicker.update();
+  powerCheckTicker.update();
+  ws.cleanupClients();
 }
