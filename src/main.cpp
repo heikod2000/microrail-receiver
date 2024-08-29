@@ -83,8 +83,6 @@ RunningMedian median1 = RunningMedian(10);
 int direction = dir_forward;   // Richtung 0: vorwärts, 1: rückwärts
 int actual_speed = 0;          // aktuelle Geschwindigkeit 0 - 100
 int target_speed = 0;          // Zielgeschwindigkeit
-byte batRate = 100;            // Akku-Kapazität
-float batVoltage = 4.2;        // Akku-Spannung
 
 const char *configFilename = "/config.json";  // Filename in Filesystem (LittleFS)
 String appVersionString = "MicroRail R v" + appVersion;
@@ -230,20 +228,23 @@ void handleCommands(char* command) {
   Serial.printf("Command: [%s]\n", command);
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  if (strcmp(command, "#STOP") == 0) {
+  if (strcmp(command, "#ST") == 0) {
+    // #Stop
     target_speed = 0;
-  } else if (strcmp(command, "#SLOWER") == 0) {
+  } else if (strcmp(command, "#SL") == 0) {
+    // #Slower
     target_speed -= motor_speed_step;
     if (target_speed < 0) {
       target_speed = 0;
     }
-  } else if (strcmp(command, "#FASTER") == 0) {
+  } else if (strcmp(command, "#FA") == 0) {
+    // #Faster
     target_speed += motor_speed_step;
     if (target_speed > 100) {
       target_speed = 100;
     }
-  } else if (strcmp(command, "#CHANGEDIRECTION") == 0) {
-    // Richtungswechsel nur bei Halt
+  } else if (strcmp(command, "#DI") == 0) {
+    // Richtungswechsel nur bei Halt ChangeDirection
     if (actual_speed == 0) {
       if (direction == dir_forward) {
         // vorwärts -> umschalten auf rückwärts
@@ -257,7 +258,7 @@ void handleCommands(char* command) {
         Serial.println("Richtungswechsel vorwärts");
         direction = dir_forward;
         motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
-        delay(100);
+        delay(100); // TODO: Pause notwendig?
         motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW);
       }
       delay(100);
@@ -367,17 +368,13 @@ void motionControl() {
  *
  */
 void checkPower() {
-  int raw = analogRead(A0);
-  median1.add(raw);
+  int sensorValue = analogRead(A0);
+  median1.add(sensorValue);
   long m = median1.getMedian();
-  unsigned long BatValue = m * 100L;
-  float BatVoltage1 = BatValue * 4.2 / 1024L;
+  float batVoltage = m * (4.2 / 1023.0);
 
-  batRate = map(BatVoltage1, 240, 420, 0, 100);
-  batVoltage = BatVoltage1 / 100.0;
-  batVoltage = roundf(batVoltage * 100) / 100;
-  Serial.printf("Akku %f V, %d %%\n", batVoltage, batRate);
-  ws.printfAll("B:%0.1f:%d", batVoltage, batRate);
+  Serial.printf("Akku %0.1f V, SensorValue: %ld\n", batVoltage, m);
+  ws.printfAll("B:%0.1f", batVoltage);
 }
 
 /**
@@ -409,6 +406,7 @@ void setup() {
   initWebServer();
 
   // Start Timer
+  motionControlTicker.interval(400); // Trägheit, TODO: aus config
   motionControlTicker.start();
   powerCheckTicker.start();
   Serial.println("- Timer started : OK");

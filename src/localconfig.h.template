@@ -1,0 +1,6 @@
+
+
+// Zugangsdaten für bestehendes WLAN
+// TODO: Daten für lokale Entwicklung anpassen und in 'localconfig.h' umbenennen.
+const char* ssidSTA = "<wlan_ssid>";
+const char* passwordSTA = "<wlan_password>";

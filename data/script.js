@@ -55,9 +55,8 @@ function updateDirectionSpeed(direction, speed) {
   }
 }
 
-function updateBattery(voltage, capacity) {
+function updateBattery(voltage) {
   lblVoltage.textContent = voltage
-  lblCapacity.textContent = capacity
 }
 
 function onMessage(event) {
@@ -66,7 +65,7 @@ function onMessage(event) {
   if (cmd === 'A') {
     updateDirectionSpeed(Number.parseInt(data[1]), Number.parseInt(data[2]))
   } else if (cmd === 'B') {
-    updateBattery(data[1], data[2])
+    updateBattery(data[1])
   }
 };
 
@@ -76,20 +75,20 @@ function onMessage(event) {
 
 // Richtungsänderung
 function onChangeDirection() {
-    ws.send('#CHANGEDIRECTION')
+    ws.send('#DI')
 }
 
 // Button Langsamer
 function onSlower() {
-    ws.send('#SLOWER')
+    ws.send('#SL')
 }
 
 // Button Schneller
 function onFaster() {
-    ws.send('#FASTER')
+    ws.send('#FA')
 }
 
 // Button Stop
 function onStop() {
-    ws.send('#STOP')
+    ws.send('#ST')
 }
