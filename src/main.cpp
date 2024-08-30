@@ -228,7 +228,11 @@ void handleCommands(char* command) {
   Serial.printf("Command: [%s]\n", command);
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  if (strcmp(command, "#ST") == 0) {
+  if (strcmp(command, "#INFO") == 0) {
+    // #INFO
+    ws.printfAll("I:%s:%s:%s", config[CFG_WLAN_SSID].as<const char*>(),
+      config[CFG_NAME].as<const char*>(), appVersion.c_str());
+  } else if (strcmp(command, "#ST") == 0) {
     // #Stop
     target_speed = 0;
   } else if (strcmp(command, "#SL") == 0) {

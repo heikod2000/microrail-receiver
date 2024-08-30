@@ -24,6 +24,7 @@ function initWebSocket() {
 
 function onOpen(event) {
   console.log("WebSocket Connected");
+  ws.send('#INFO')
 }
 
 function onClose(event) {
@@ -66,6 +67,8 @@ function onMessage(event) {
     updateDirectionSpeed(Number.parseInt(data[1]), Number.parseInt(data[2]))
   } else if (cmd === 'B') {
     updateBattery(data[1])
+  } else if (cmd === 'I') {
+    console.log('Info:', data)
   }
 };
 
