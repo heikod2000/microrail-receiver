@@ -4,6 +4,9 @@
 
 - Websocket-Commands vom Client zum Server verkürzt (`#SL` statt `#SLOWER` usw.)
 - Die Berechnung und Anzeige der Batteriekapazität wurde entfernt
+- neues Websocket-Command #INFO, Übermittlung Name, SSID und Version an einen Client
+- neue Einstellung: Trägheit/Inertia
+- neue Einstellung: Tausch Motorpolung
 
 ## Version 0.9.1
 

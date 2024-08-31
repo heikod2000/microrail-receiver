@@ -4,5 +4,7 @@
     "wlan_password": "microrail",
     "motor_frequency": 100,
     "motor_maxspeed": 100,
-    "motor_speed_step": 10
+    "motor_speed_step": 10,
+    "motor_reverse": 1,
+    "motor_inertia": 200
 }

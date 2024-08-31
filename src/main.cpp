@@ -24,6 +24,8 @@
 #define CFG_MOTOR_FREQUENCY "motor_frequency"
 #define CFG_MOTOR_MAXSPEED "motor_maxspeed"
 #define CFG_MOTOR_SPEED_STEP "motor_speed_step"
+#define CFG_MOTOR_INERTIA "motor_inertia"
+#define CFG_MOTOR_REVERSE "motor_reverse"
 #define CFG_IP_ADDRESS "ip_address"
 #define CFG_MAC_ADDRESS "mac_address"
 
@@ -87,6 +89,21 @@ int target_speed = 0;          // Zielgeschwindigkeit
 const char *configFilename = "/config.json";  // Filename in Filesystem (LittleFS)
 String appVersionString = "MicroRail R v" + appVersion;
 StaticJsonDocument<350> config;
+
+void debugConfig(JsonDocument& config) {
+    Serial.printf("WLAN SSID: [%s], Passwort: [%s]\n",
+      config[CFG_WLAN_SSID].as<const char*>(),
+      config[CFG_WLAN_PASSWORD].as<const char*>());
+    Serial.printf("IP-Address: [%s], MAC-Address: [%s]\n",
+      config[CFG_IP_ADDRESS].as<const char*>(), config[CFG_MAC_ADDRESS].as<const char*>());
+    Serial.printf("Name: [%s], Motor Frequenz: [%d] Hz, Maxspeed: [%d] %%, SpeedStep: [%d], Inertia: [%d], Motor-Reverse: [%d]\n",
+      config[CFG_NAME].as<const char*>(),
+      config[CFG_MOTOR_FREQUENCY].as<unsigned int>(),
+      config[CFG_MOTOR_MAXSPEED].as<unsigned int>(),
+      config[CFG_MOTOR_SPEED_STEP].as<unsigned int>(),
+      config[CFG_MOTOR_INERTIA].as<unsigned int>(),
+      config[CFG_MOTOR_REVERSE].as<unsigned int>());
+}
 
 void listAllFilesInDir(String dir_path) {
 	Dir dir = LittleFS.openDir(dir_path);
@@ -170,6 +187,11 @@ String processor(const String& var) {
       return String(config[CFG_MOTOR_MAXSPEED]);
   } else if(var == "MOTORSPEEDSTEP") {
       return String(config[CFG_MOTOR_SPEED_STEP]);
+  } else if(var == "MOTORINERTIA") {
+      return String(config[CFG_MOTOR_INERTIA]);
+  } else if(var == "MOTORREVERSE") {
+      int reverse = config[CFG_MOTOR_REVERSE];
+      return reverse == 1 ? "checked" : "";
   }
   return String();
 }
@@ -195,13 +217,16 @@ void initWebServer() {
 
   server.on("/setup", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println("save setup data");
-    StaticJsonDocument<300> newConfig;
+    StaticJsonDocument<350> newConfig;
     newConfig[CFG_NAME] = request->getParam("name", true)->value();
     newConfig[CFG_WLAN_SSID] = request->getParam("wlanssid", true)->value();
     newConfig[CFG_MOTOR_FREQUENCY] = request->getParam("motor-frequency", true)->value();
     newConfig[CFG_MOTOR_MAXSPEED] = request->getParam("motor-maxspeed", true)->value();
     newConfig[CFG_MOTOR_SPEED_STEP] = request->getParam("motor-speedstep", true)->value();
     newConfig[CFG_WLAN_PASSWORD] = request->getParam("password", true)->value();
+    // TODO: validate and sanitize inputs
+    newConfig[CFG_MOTOR_INERTIA] = request->getParam("motor-inertia", true)->value();
+    newConfig[CFG_MOTOR_REVERSE] = request->hasParam("motor-reverse", true) ? 1 : 0;
 
     String configFile;
     serializeJsonPretty(newConfig, configFile);
@@ -228,6 +253,8 @@ void handleCommands(char* command) {
   Serial.printf("Command: [%s]\n", command);
 
   int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
+  int reverse = config[CFG_MOTOR_REVERSE];
+
   if (strcmp(command, "#INFO") == 0) {
     // #INFO
     ws.printfAll("I:%s:%s:%s", config[CFG_WLAN_SSID].as<const char*>(),
@@ -256,14 +283,14 @@ void handleCommands(char* command) {
         direction = dir_backward;
         motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
         delay(100);
-        motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CCW);
+        motor.changeStatus(MOTOR_CH_BOTH, reverse==1 ? MOTOR_STATUS_CCW : MOTOR_STATUS_CW);
       } else {
         // rückwärts -> umschalten auf vorwärts
         Serial.println("Richtungswechsel vorwärts");
         direction = dir_forward;
         motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STANDBY);
         delay(100); // TODO: Pause notwendig?
-        motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW);
+        motor.changeStatus(MOTOR_CH_BOTH, reverse==1 ? MOTOR_STATUS_CW : MOTOR_STATUS_CCW);
       }
       delay(100);
       notifyClients();
@@ -307,6 +334,8 @@ void initWebSocket() {
 }
 
 void initMotorShield() {
+  int reverse = config[CFG_MOTOR_REVERSE];
+
   while (motor.PRODUCT_ID != PRODUCT_ID_I2C_MOTOR) {
     motor.getInfo();
     onboard_led.on = millis() % 200 < 50;
@@ -315,23 +344,9 @@ void initMotorShield() {
   int motor_frequency = config[CFG_MOTOR_FREQUENCY];
   motor.changeFreq(MOTOR_CH_BOTH, motor_frequency);
   motor.changeDuty(MOTOR_CH_BOTH, 0.0);
-  motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_CW); // Vorwärts
+  motor.changeStatus(MOTOR_CH_BOTH, reverse==1 ? MOTOR_STATUS_CCW : MOTOR_STATUS_CW); // Vorwärts
   Serial.println("- init Motor-Shield: OK");
 }
-
-void debugConfig(JsonDocument& config) {
-    Serial.printf("WLAN SSID: [%s], Passwort: [%s]\n",
-      config[CFG_WLAN_SSID].as<const char*>(),
-      config[CFG_WLAN_PASSWORD].as<const char*>());
-    Serial.printf("IP-Address: [%s], MAC-Address: [%s]\n",
-      config[CFG_IP_ADDRESS].as<const char*>(), config[CFG_MAC_ADDRESS].as<const char*>());
-    Serial.printf("Name: [%s], Motor Frequenz: [%d] Hz, Maxspeed: [%d] %%, SpeedStep: [%d]\n",
-      config[CFG_NAME].as<const char*>(),
-      config[CFG_MOTOR_FREQUENCY].as<unsigned int>(),
-      config[CFG_MOTOR_MAXSPEED].as<unsigned int>(),
-      config[CFG_MOTOR_SPEED_STEP].as<unsigned int>());
-}
-
 
 /**
  * @brief timer-gesteuerte Routine zur Anpasusng der Geschwindigkeit.
@@ -410,7 +425,7 @@ void setup() {
   initWebServer();
 
   // Start Timer
-  motionControlTicker.interval(400); // Trägheit, TODO: aus config
+  motionControlTicker.interval(config[CFG_MOTOR_INERTIA].as<unsigned int>());
   motionControlTicker.start();
   powerCheckTicker.start();
   Serial.println("- Timer started : OK");
