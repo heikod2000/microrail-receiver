@@ -1,3 +1,6 @@
+// Wenn definiert, dann Verbindung mit bestehendem WLAN (file localconfig.h)
+//#define LOCAL_DEBUG
+
 /**
  *  MICRORAIL
  *  Motorensteuerung via WLAN
@@ -28,9 +31,6 @@
 #define CFG_MOTOR_REVERSE "motor_reverse"
 #define CFG_IP_ADDRESS "ip_address"
 #define CFG_MAC_ADDRESS "mac_address"
-
-// Wenn definiert, dann Verbindung mit bestehendem WLAN (file localconfig.h)
-//#define LOCAL_DEBUG
 
 #ifdef  LOCAL_DEBUG
 #include "localconfig.h"
@@ -390,7 +390,8 @@ void checkPower() {
   int sensorValue = analogRead(A0);
   median1.add(sensorValue);
   long m = median1.getMedian();
-  float batVoltage = m * (4.2 / 1023.0);
+  //float batVoltage = m * (4.2 / 1023.0);
+  float batVoltage = m * (13.2 / 1023.0);
 
   Serial.printf("Akku %0.1f V, SensorValue: %ld\n", batVoltage, m);
   ws.printfAll("B:%0.1f", batVoltage);

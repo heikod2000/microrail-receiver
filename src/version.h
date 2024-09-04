@@ -4,4 +4,4 @@
  */
 
 // Hier version ändern, um die Softwareversion zu ändern
-String appVersion = "0.9.2";    // Software-Version
+String appVersion = "1.0.0";    // Software-Version

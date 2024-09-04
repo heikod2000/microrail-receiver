@@ -1,5 +1,10 @@
 # Version-History
 
+## Version 1.0.0
+
+- **neue Hardwareversion!!!*
+- Der Widerstand am Analogen Eingang `A0` erhöht sich auf 1M. Damit wird eine Spannungsmessung bis 13,2V möglich.
+
 ## Version 0.9.2
 
 - Websocket-Commands vom Client zum Server verkürzt (`#SL` statt `#SLOWER` usw.)
