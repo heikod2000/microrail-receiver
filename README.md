@@ -4,15 +4,19 @@ Heiko Deserno, 2022, [FB22](https://feldbahn22.de)
 
 FB22-Artikel zum Projekt: https://fb22.de/123
 
+> [!IMPORTANT]
+> Die Dokumentation ist veraltet und wird in Kürze aktualisiert.
+> Wichtig ist die Änderung des Widerstands zur Spannungsmessung von 100K auf 1M (Ab Version v1.0.0).
+
 `Microrail` ist eine Software zur drahtlosen Steuerung von Modellfahrzeugen. Zum System gehören neben dem hier beschriebenen Empfänger ein Sender (Handregler). Der Sender als Bediengerät mit Drehregler und Display ist ein separates Softwareprojekt (derzeit noch nicht vorhanden).
 
 ### Warum gibt es Microrail?
 
-Da die wunderbaren [Deltang](http://www.deltang.co.uk/)-Empfänger *Rx6* nicht mehr hergestellt werden und kaum noch lieferbar sind, habe ich nach einer geeigneten Alternative zur drahtlosen Steuerung von Modellbahn-Fahrzeugen (insbesondere Feldbahnen im Maßstab 1:13) gesucht. [Locoremote](http://www.locoremote.co.uk/) ist auf den ersten Blick eine brauchbare Alternative. Den für mich größten Makel wollte ich jedoch nicht hinnehmen: Eine Modellfahrzeug sollte nicht mit einem Handy gesteuert werden. Hier gehört ein richtiger Handregler mit Tasten und einem Drehregler her. Da *Locoremote* diese Funktion nicht unterstützt, kam die Idee einer eigenen Software. Die Idee zur dieser Software stammt urspünglich von [Olle Sköld](http://depronized.com/), der eine solche Steuerung für seine [Hectorrail](https://www.thingiverse.com/thing:2575667)-Lokomotive vorstellte. `Microrail` nutzt eine andere Hardware-Plattform sowie ein modifiziertes Bedienkonzept. Auch die Idee des Handsenders stammt von ihm. Auf [Thingiverse](https://www.thingiverse.com/thing:3252986) stellte er einen Prototypen vor, der eher als Idee statt einer fertigen Lösung zu verstehen ist. 
+Da die wunderbaren [Deltang](http://www.deltang.co.uk/)-Empfänger *Rx6* nicht mehr hergestellt werden und kaum noch lieferbar sind, habe ich nach einer geeigneten Alternative zur drahtlosen Steuerung von Modellbahn-Fahrzeugen (insbesondere Feldbahnen im Maßstab 1:13) gesucht. [Locoremote](http://www.locoremote.co.uk/) ist auf den ersten Blick eine brauchbare Alternative. Den für mich größten Makel wollte ich jedoch nicht hinnehmen: Eine Modellfahrzeug sollte nicht mit einem Handy gesteuert werden. Hier gehört ein richtiger Handregler mit Tasten und einem Drehregler her. Da *Locoremote* diese Funktion nicht unterstützt, kam die Idee einer eigenen Software. Die Idee zur dieser Software stammt urspünglich von [Olle Sköld](http://depronized.com/), der eine solche Steuerung für seine [Hectorrail](https://www.thingiverse.com/thing:2575667)-Lokomotive vorstellte. `Microrail` nutzt eine andere Hardware-Plattform sowie ein modifiziertes Bedienkonzept. Auch die Idee des Handsenders stammt von ihm. Auf [Thingiverse](https://www.thingiverse.com/thing:3252986) stellte er einen Prototypen vor, der eher als Idee statt einer fertigen Lösung zu verstehen ist.
 
 ## Microrail-Receiver
 
-Der `Microrail`-Receiver bzw. Empfänger ist die Komponente zur Motorensteuerung. Ein  Microcontroller und eine Motoren-Steuerplatine genügen für diese Funktion. Der Microcontroller erstellt einen eigenen WLAN-Accesspoint. WLAN-fähige Clients wie Mobiltelefone oder Tablets können sich mit dem WLAN des Microcontrollers verbinden und die UI über die Adresse http://192.168.1.4 aufrufen. Die UI enthält Buttons zur Steuerung von Geschwindigkeit und Fahrtrichtung. 
+Der `Microrail`-Receiver bzw. Empfänger ist die Komponente zur Motorensteuerung. Ein  Microcontroller und eine Motoren-Steuerplatine genügen für diese Funktion. Der Microcontroller erstellt einen eigenen WLAN-Accesspoint. WLAN-fähige Clients wie Mobiltelefone oder Tablets können sich mit dem WLAN des Microcontrollers verbinden und die UI über die Adresse http://192.168.1.4 aufrufen. Die UI enthält Buttons zur Steuerung von Geschwindigkeit und Fahrtrichtung.
 
 ### Hardware
 
@@ -20,7 +24,7 @@ Als Microcontroller wird ein [Lolin D1 mini](https://www.wemos.cc/en/latest/d1/d
 
 - [Lolin Motorshield V 2.0.0](https://www.wemos.cc/en/latest/d1_mini_shield/motor.html), TB6612FNG Chipsatz, schwer lieferbar
 - [Lolin Motorshield HR8833](https://www.wemos.cc/en/latest/d1_mini_shield/hr8833_motor.html), HR8833 Chipsatz
-- [Lolin Motorshield AT8870](https://www.wemos.cc/en/latest/d1_mini_shield/at8870_motor.html), AT8870 Chipsatz 
+- [Lolin Motorshield AT8870](https://www.wemos.cc/en/latest/d1_mini_shield/at8870_motor.html), AT8870 Chipsatz
 
 Alle diese Platinen werden über den *I2C*-Bus mit dem *D1 mini* verbunden. Die Software-Steuerung basiert auf der [Lolin-Treiberlib](https://github.com/wemos/LOLIN_I2C_MOTOR_Library).
 
@@ -68,7 +72,7 @@ Mit jeder Client-Verbindung wird ein Kanal im Websocket-Server geöffnet. Der Se
 
 #### Projekt/Entwicklungsumgebung
 
-Das Software-Projekt ist ein [PlatformIO](https://platformio.org/)-Projekt. Zur Entwicklung und Übersetzung des Codes wird [VS Code](https://code.visualstudio.com/) mit der Erweiterung *PlatformIO* benötigt. 
+Das Software-Projekt ist ein [PlatformIO](https://platformio.org/)-Projekt. Zur Entwicklung und Übersetzung des Codes wird [VS Code](https://code.visualstudio.com/) mit der Erweiterung *PlatformIO* benötigt.
 
 #### Code-Struktur
 
@@ -105,11 +109,10 @@ Die WebUi empfängt Ereignisse über den Websocket:
 - Batteriespannung
 - Software-Version
 
-Bei Geschwidigkeiten > 0 kann die Fahrtrichtung nicht geändert werden. Die Buttons sind deaktiviert. 
+Bei Geschwidigkeiten > 0 kann die Fahrtrichtung nicht geändert werden. Die Buttons sind deaktiviert.
 
 ![Mircorail-WebUi](/images/microrail-ui-2.png)
 
 # Ausblick
 
 Die Steuerung des `Microrail`-Empfängers über die Web-Oberfläche ist nur ein erster Schritt. Das große Ziel ist ein eigenständiger `Microrail`-Sender mit Tasten, Drehregler und Display. Der Sender startet WLAN und einen Websocket-Client und kommuniziert mit dem Empfänger.
-
