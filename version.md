@@ -1,5 +1,10 @@
 # Version-History
 
+## Version 1.0.1
+
+- Textänderung Setup: alt `Motor-Trägheit` neu `Regler Verzögerung`
+- Setup: Eingabeprüfung der nummerischen Parameter. Bei erfolgloser Prüfung werden die Default-Werte verwendet.
+
 ## Version 1.0.0
 
 - **neue Hardwareversion!!!*

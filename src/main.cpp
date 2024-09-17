@@ -219,17 +219,49 @@ void initWebServer() {
     Serial.println("save setup data");
     StaticJsonDocument<350> newConfig;
     newConfig[CFG_NAME] = request->getParam("name", true)->value();
-    newConfig[CFG_WLAN_SSID] = request->getParam("wlanssid", true)->value();
-    newConfig[CFG_MOTOR_FREQUENCY] = request->getParam("motor-frequency", true)->value();
-    newConfig[CFG_MOTOR_MAXSPEED] = request->getParam("motor-maxspeed", true)->value();
-    newConfig[CFG_MOTOR_SPEED_STEP] = request->getParam("motor-speedstep", true)->value();
+    String wlan_ssid = request->getParam("wlanssid", true)->value();
     newConfig[CFG_WLAN_PASSWORD] = request->getParam("password", true)->value();
-    // TODO: validate and sanitize inputs
-    newConfig[CFG_MOTOR_INERTIA] = request->getParam("motor-inertia", true)->value();
+    int motor_frequency = request->getParam("motor-frequency", true)->value().toInt();
+    int motor_maxspeed = request->getParam("motor-maxspeed", true)->value().toInt();
+    int motor_speedstep = request->getParam("motor-speedstep", true)->value().toInt();
+    int motor_inertia = request->getParam("motor-inertia", true)->value().toInt();
     newConfig[CFG_MOTOR_REVERSE] = request->hasParam("motor-reverse", true) ? 1 : 0;
+
+    // Validierung and sanitizing inputs...
+    if (motor_inertia >= 50 && motor_inertia <= 500) {
+      newConfig[CFG_MOTOR_INERTIA] = motor_inertia;
+    } else {
+      Serial.println("Invalid motor-inertia value. Must be between 50 and 500.");
+      newConfig[CFG_MOTOR_INERTIA] = 200; // Default to 200
+    }
+
+    if (motor_frequency >= 50 && motor_frequency <= 20000) {
+      newConfig[CFG_MOTOR_FREQUENCY] = motor_frequency;
+    } else {
+      Serial.println("Invalid motor-frequence value. Must be between 50 and 20000.");
+      newConfig[CFG_MOTOR_FREQUENCY] = 100;
+    }
+
+    if (motor_maxspeed >= 20 && motor_maxspeed <= 100) {
+      newConfig[CFG_MOTOR_MAXSPEED] = motor_maxspeed;
+    } else {
+      Serial.println("Invalid motor-maxspeed value. Must be between 20 and 100.");
+      newConfig[CFG_MOTOR_MAXSPEED] = 100;
+    }
+
+    if (motor_speedstep >= 4 && motor_speedstep <= 30) {
+      newConfig[CFG_MOTOR_SPEED_STEP] = motor_speedstep;
+    } else {
+      Serial.println("Invalid motor-speedstep value. Must be between 4 and 30.");
+      newConfig[CFG_MOTOR_SPEED_STEP] = 10;
+    }
+
+    // TODO: Validate wlan_name, name
+    newConfig[CFG_WLAN_SSID] = wlan_ssid;
 
     String configFile;
     serializeJsonPretty(newConfig, configFile);
+    Serial.printf("C:%s\n", configFile.c_str());
     File file = LittleFS.open("/config.json", "w");
     file.print(configFile);
     file.close();
@@ -438,6 +470,7 @@ void setup() {
   // Onboard-LED ausschalten, Status-LED einschalten
   onboard_led.on = true; onboard_led.update();
   status_led.on = true; status_led.update();
+
 }
 
 // ----------------------------------------------------------------------------
