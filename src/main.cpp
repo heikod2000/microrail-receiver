@@ -1,5 +1,19 @@
 // Wenn definiert, dann Verbindung mit bestehendem WLAN (file localconfig.h)
+// Sonst neues WLAN-Netzwerk (config.json)
 //#define LOCAL_DEBUG
+
+/*
+ __     __  _______   _______
+|  |   |  ||  ___   \|  _____|
+|  |___|  || |   |  || |____
+|   ___   || |   |  ||  ____|
+|  |   |  || |__ |  || |_____
+|__|   |__||_______/ |_______|
+
+microrail.hdecloud.de
+© Heiko Deserno, 9/2024
+
+*/
 
 /**
  *  MICRORAIL
@@ -20,17 +34,8 @@
 #include <RunningMedian.h>
 #include "version.h"
 #include "wlanutils.h"
-
-#define CFG_NAME "name"
-#define CFG_WLAN_SSID "wlan_ssid"
-#define CFG_WLAN_PASSWORD "wlan_password"
-#define CFG_MOTOR_FREQUENCY "motor_frequency"
-#define CFG_MOTOR_MAXSPEED "motor_maxspeed"
-#define CFG_MOTOR_SPEED_STEP "motor_speed_step"
-#define CFG_MOTOR_INERTIA "motor_inertia"
-#define CFG_MOTOR_REVERSE "motor_reverse"
-#define CFG_IP_ADDRESS "ip_address"
-#define CFG_MAC_ADDRESS "mac_address"
+#include "types.h"
+#include "jsonutils.h"
 
 #ifdef  LOCAL_DEBUG
 #include "localconfig.h"
@@ -40,21 +45,6 @@
 #define dir_backward 1
 #define LED_STATUS D6
 #define LED_ONBOARD D4
-
-// ----------------------------------------------------------------------------
-// Definition of the LED component
-// ----------------------------------------------------------------------------
-
-struct Led {
-    // state variables
-    uint8_t pin;
-    bool    on;
-
-    // methods
-    void update() {
-        digitalWrite(pin, on ? HIGH : LOW);
-    }
-};
 
 // ----------------------------------------------------------------------------
 // Definition of global variables
@@ -88,21 +78,14 @@ int target_speed = 0;          // Zielgeschwindigkeit
 
 const char *configFilename = "/config.json";  // Filename in Filesystem (LittleFS)
 String appVersionString = "MicroRail R v" + appVersion;
-StaticJsonDocument<350> config;
 
-void debugConfig(JsonDocument& config) {
-    Serial.printf("WLAN SSID: [%s], Passwort: [%s]\n",
-      config[CFG_WLAN_SSID].as<const char*>(),
-      config[CFG_WLAN_PASSWORD].as<const char*>());
-    Serial.printf("IP-Address: [%s], MAC-Address: [%s]\n",
-      config[CFG_IP_ADDRESS].as<const char*>(), config[CFG_MAC_ADDRESS].as<const char*>());
-    Serial.printf("Name: [%s], Motor Frequenz: [%d] Hz, Maxspeed: [%d] %%, SpeedStep: [%d], Inertia: [%d], Motor-Reverse: [%d]\n",
-      config[CFG_NAME].as<const char*>(),
-      config[CFG_MOTOR_FREQUENCY].as<unsigned int>(),
-      config[CFG_MOTOR_MAXSPEED].as<unsigned int>(),
-      config[CFG_MOTOR_SPEED_STEP].as<unsigned int>(),
-      config[CFG_MOTOR_INERTIA].as<unsigned int>(),
-      config[CFG_MOTOR_REVERSE].as<unsigned int>());
+Config config;
+
+void printConfig(Config& config) {
+  Serial.printf("WLAN SSID: [%s], Passwort: [%s]\n", config.wlan_ssid.c_str(), config.wlan_password.c_str());
+  Serial.printf("IP-Address: [%s], MAC-Address: [%s]\n", config.ip_address.c_str(), config.mac_address.c_str());
+  Serial.printf("Name: [%s], Motor Frequenz: [%d] Hz, Maxspeed: [%d] %%, SpeedStep: [%d], Inertia: [%d], Motor-Reverse: [%d]\n",
+      config.name.c_str(), config.motor_frequency, config.motor_maxspeed, config.motor_speed_step, config.motor_inertia, config.motor_reverse);
 }
 
 void listAllFilesInDir(String dir_path) {
@@ -141,7 +124,7 @@ void initLittleFS() {
 /**
  * Konfiguration 'config.json' aus dem FS lesen
  */
-void initConfiguration() {
+void initConfiguration(Config& config) {
   File configFile = LittleFS.open(configFilename, "r");
   if(!configFile || configFile.isDirectory()){
     Serial.println("Fail to open configfile for reading");
@@ -150,22 +133,25 @@ void initConfiguration() {
       onboard_led.update();
     }
   }
-  deserializeJson(config, configFile);
+  StaticJsonDocument<350> jsonCfg;
+  deserializeJson(jsonCfg, configFile);
   configFile.close();
+  config = json2Config(jsonCfg);
+
   Serial.println("- init Configuration : OK");
 }
 
 void initWiFi() {
 #ifdef LOCAL_DEBUG
   setupWiFiSTA(ssidSTA, passwordSTA);  // WiFi Verbindung mit bestehendem WLAN aufbauen
-  config[CFG_IP_ADDRESS] = WiFi.localIP().toString();
+  config.ip_address = WiFi.localIP().toString();
 #else
-  const char* wlan_ssid = config[CFG_WLAN_SSID];
-  const char* wlan_password = config[CFG_WLAN_PASSWORD];
+  const char* wlan_ssid = config.wlan_ssid.c_str();
+  const char* wlan_password = config.wlan_password.c_str();
   setupWifiAP(wlan_ssid, wlan_password);  // WLAN-Accesspoint starten
-  config[CFG_IP_ADDRESS] = WiFi.softAPIP();
+  config.ip_address = WiFi.softAPIP().toString();
 #endif
-  config[CFG_MAC_ADDRESS] = WiFi.macAddress();
+  config.mac_address = WiFi.macAddress();
 }
 
 // ----------------------------------------------------------------------------
@@ -174,23 +160,23 @@ void initWiFi() {
 
 String processor(const String& var) {
   if(var == "SSID") {
-    return config[CFG_WLAN_SSID];
+    return config.wlan_password;
   } else if(var == "NAME") {
-      return config[CFG_NAME];
+      return config.name;
   } else if(var == "VERSION") {
     return appVersionString;
   } else if(var == "PASSWORD") {
-      return config[CFG_WLAN_PASSWORD];
+      return config.wlan_password;
   } else if(var == "MOTORFREQUENCY") {
-      return String(config[CFG_MOTOR_FREQUENCY]);
+      return String(config.motor_frequency);
   } else if(var == "MOTORMAXSPEED") {
-      return String(config[CFG_MOTOR_MAXSPEED]);
+      return String(config.motor_maxspeed);
   } else if(var == "MOTORSPEEDSTEP") {
-      return String(config[CFG_MOTOR_SPEED_STEP]);
+      return String(config.motor_speed_step);
   } else if(var == "MOTORINERTIA") {
-      return String(config[CFG_MOTOR_INERTIA]);
+      return String(config.motor_inertia);
   } else if(var == "MOTORREVERSE") {
-      int reverse = config[CFG_MOTOR_REVERSE];
+      int reverse = config.motor_reverse;
       return reverse == 1 ? "checked" : "";
   }
   return String();
@@ -217,52 +203,21 @@ void initWebServer() {
 
   server.on("/setup", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println("save setup data");
-    StaticJsonDocument<350> newConfig;
-    newConfig[CFG_NAME] = request->getParam("name", true)->value();
-    String wlan_ssid = request->getParam("wlanssid", true)->value();
-    newConfig[CFG_WLAN_PASSWORD] = request->getParam("password", true)->value();
-    int motor_frequency = request->getParam("motor-frequency", true)->value().toInt();
-    int motor_maxspeed = request->getParam("motor-maxspeed", true)->value().toInt();
-    int motor_speedstep = request->getParam("motor-speedstep", true)->value().toInt();
-    int motor_inertia = request->getParam("motor-inertia", true)->value().toInt();
-    newConfig[CFG_MOTOR_REVERSE] = request->hasParam("motor-reverse", true) ? 1 : 0;
 
-    // Validierung and sanitizing inputs...
-    if (motor_inertia >= 50 && motor_inertia <= 500) {
-      newConfig[CFG_MOTOR_INERTIA] = motor_inertia;
-    } else {
-      Serial.println("Invalid motor-inertia value. Must be between 50 and 500.");
-      newConfig[CFG_MOTOR_INERTIA] = 200; // Default to 200
-    }
-
-    if (motor_frequency >= 50 && motor_frequency <= 20000) {
-      newConfig[CFG_MOTOR_FREQUENCY] = motor_frequency;
-    } else {
-      Serial.println("Invalid motor-frequence value. Must be between 50 and 20000.");
-      newConfig[CFG_MOTOR_FREQUENCY] = 100;
-    }
-
-    if (motor_maxspeed >= 20 && motor_maxspeed <= 100) {
-      newConfig[CFG_MOTOR_MAXSPEED] = motor_maxspeed;
-    } else {
-      Serial.println("Invalid motor-maxspeed value. Must be between 20 and 100.");
-      newConfig[CFG_MOTOR_MAXSPEED] = 100;
-    }
-
-    if (motor_speedstep >= 4 && motor_speedstep <= 30) {
-      newConfig[CFG_MOTOR_SPEED_STEP] = motor_speedstep;
-    } else {
-      Serial.println("Invalid motor-speedstep value. Must be between 4 and 30.");
-      newConfig[CFG_MOTOR_SPEED_STEP] = 10;
-    }
-
-    // TODO: Validate wlan_name, name
-    newConfig[CFG_WLAN_SSID] = wlan_ssid;
+    Config newConfig;
+    newConfig.name = request->getParam("name", true)->value();
+    newConfig.wlan_ssid = request->getParam("wlanssid", true)->value();
+    newConfig.wlan_password = request->getParam("password", true)->value();
+    newConfig.motor_frequency = request->getParam("motor-frequency", true)->value().toInt();
+    newConfig.motor_maxspeed = request->getParam("motor-maxspeed", true)->value().toInt();
+    newConfig.motor_speed_step = request->getParam("motor-speedstep", true)->value().toInt();
+    newConfig.motor_inertia = request->getParam("motor-inertia", true)->value().toInt();
+    newConfig.motor_reverse = request->hasParam("motor-reverse", true) ? 1 : 0;
 
     String configFile;
-    serializeJsonPretty(newConfig, configFile);
+    serializeJsonPretty(config2Json(newConfig), configFile);
     Serial.printf("C:%s\n", configFile.c_str());
-    File file = LittleFS.open("/config.json", "w");
+    File file = LittleFS.open(configFilename, "w");
     file.print(configFile);
     file.close();
 
@@ -284,13 +239,12 @@ void notifyClients() {
 void handleCommands(char* command) {
   Serial.printf("Command: [%s]\n", command);
 
-  int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  int reverse = config[CFG_MOTOR_REVERSE];
+  int motor_speed_step = config.motor_speed_step;
+  int reverse = config.motor_reverse;
 
   if (strcmp(command, "#INFO") == 0) {
     // #INFO
-    ws.printfAll("I:%s:%s:%s", config[CFG_WLAN_SSID].as<const char*>(),
-      config[CFG_NAME].as<const char*>(), appVersion.c_str());
+    ws.printfAll("I:%s:%s:%s", config.wlan_ssid.c_str(), config.name.c_str(), appVersion.c_str());
   } else if (strcmp(command, "#ST") == 0) {
     // #Stop
     target_speed = 0;
@@ -366,14 +320,14 @@ void initWebSocket() {
 }
 
 void initMotorShield() {
-  int reverse = config[CFG_MOTOR_REVERSE];
+  int reverse = config.motor_reverse;
 
   while (motor.PRODUCT_ID != PRODUCT_ID_I2C_MOTOR) {
     motor.getInfo();
     onboard_led.on = millis() % 200 < 50;
     onboard_led.update();
   }
-  int motor_frequency = config[CFG_MOTOR_FREQUENCY];
+  int motor_frequency = config.motor_frequency;
   motor.changeFreq(MOTOR_CH_BOTH, motor_frequency);
   motor.changeDuty(MOTOR_CH_BOTH, 0.0);
   motor.changeStatus(MOTOR_CH_BOTH, reverse==1 ? MOTOR_STATUS_CCW : MOTOR_STATUS_CW); // Vorwärts
@@ -391,8 +345,8 @@ void motionControl() {
   }
   Serial.println("motionControl");
 
-  int motor_speed_step = config[CFG_MOTOR_SPEED_STEP];
-  float motor_maxspeed = (float)config[CFG_MOTOR_MAXSPEED].as<unsigned int>() / 100;
+  int motor_speed_step = config.motor_speed_step;
+  float motor_maxspeed = (float)config.motor_maxspeed / 100;
 
   if (actual_speed < target_speed) {
     // Geschwindigkeit erhöhen
@@ -451,21 +405,21 @@ void setup() {
   Serial.printf("\n- Init: %s\n", appVersionString.c_str());
 
   initLittleFS();
-  initConfiguration();
+  initConfiguration(config);
   initWiFi();
   initMotorShield();
   initWebSocket();
   initWebServer();
 
   // Start Timer
-  motionControlTicker.interval(config[CFG_MOTOR_INERTIA].as<unsigned int>());
+  motionControlTicker.interval(config.motor_inertia);
   motionControlTicker.start();
   powerCheckTicker.start();
   Serial.println("- Timer started : OK");
 
   Serial.println("- Setup completed");
   Serial.println("----------------------------------------------");
-  debugConfig(config);
+  printConfig(config);
 
   // Onboard-LED ausschalten, Status-LED einschalten
   onboard_led.on = true; onboard_led.update();

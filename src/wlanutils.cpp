@@ -1,3 +1,16 @@
+/*
+ __     __  _______   _______
+|  |   |  ||  ___   \|  _____|
+|  |___|  || |   |  || |____
+|   ___   || |   |  ||  ____|
+|  |   |  || |__ |  || |_____
+|__|   |__||_______/ |_______|
+
+microrail.hdecloud.de
+© Heiko Deserno, 9/2024
+
+*/
+
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
