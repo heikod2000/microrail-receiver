@@ -1,5 +1,10 @@
 # Version-History
 
+## Version 1.1.0
+
+- Code-Refactoring und -Optimierung
+- neue Minorversion
+
 ## Version 1.0.1
 
 - Textänderung Setup: alt `Motor-Trägheit` neu `Regler Verzögerung`
