@@ -79,6 +79,8 @@ StaticJsonDocument<350> config2Json(Config& config){
 
   // TODO: Validate wlan_name, name
   newConfig[CFG_WLAN_SSID] = config.wlan_ssid;
+  newConfig[CFG_WLAN_PASSWORD] = config.wlan_password;
+  newConfig[CFG_NAME] = config.name;
 
   return newConfig;
 }

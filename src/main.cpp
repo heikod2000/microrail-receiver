@@ -160,7 +160,7 @@ void initWiFi() {
 
 String processor(const String& var) {
   if(var == "SSID") {
-    return config.wlan_password;
+    return config.wlan_ssid;
   } else if(var == "NAME") {
       return config.name;
   } else if(var == "VERSION") {
